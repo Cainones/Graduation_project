@@ -1,12 +1,14 @@
 import ScheduleForm from '@/components/ScheduleForm';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View
+  Alert,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -15,13 +17,14 @@ interface ScheduleItem {
   title: string;
   startDate: string;
   endDate: string;
-  status: 'on-track' | 'at-risk' | 'delayed';
+  status: 'on-track' | 'at-risk' | 'delayed' | 'in-progress';
   progress: number;
   dependencies: string[];
   responsible: string;
 }
 
 export default function ScheduleScreen() {
+  const router = useRouter();
   const [scheduleItems, setScheduleItems] = useState<ScheduleItem[]>([
     {
       id: '1',
@@ -31,7 +34,7 @@ export default function ScheduleScreen() {
       status: 'on-track',
       progress: 45,
       dependencies: [],
-      responsible: 'Иванов И.И.',
+      responsible: 'Сергей Смирнов',
     },
     {
       id: '2',
@@ -41,7 +44,7 @@ export default function ScheduleScreen() {
       status: 'at-risk',
       progress: 0,
       dependencies: ['1'],
-      responsible: 'Петров П.П.',
+      responsible: 'Александр Кузнецов',
     },
   ]);
 
@@ -49,25 +52,110 @@ export default function ScheduleScreen() {
   const [isFormVisible, setIsFormVisible] = useState(false);
   const [selectedItem, setSelectedItem] = useState<ScheduleItem | undefined>();
 
-  const handleAddItem = (item: any) => {
-    if (selectedItem) {
-      setScheduleItems(prev => prev.map(i => i.id === selectedItem.id ? { ...item, id: i.id } : i));
-    } else {
-      setScheduleItems(prev => [...prev, { ...item, id: Date.now().toString() }]);
+  const hasCircularDependency = (
+    itemId: string,
+    dependencies: string[],
+    visited: Set<string> = new Set()
+  ): boolean => {
+    if (visited.has(itemId)) {
+      return true;
     }
-    setIsFormVisible(false);
+    visited.add(itemId);
+
+    for (const depId of dependencies) {
+      const depItem = scheduleItems.find((item) => item.id === depId);
+      if (depItem && hasCircularDependency(depId, depItem.dependencies, new Set(visited))) {
+        return true;
+      }
+    }
+
+    return false;
+  };
+
+  const validateDependencies = (item: Omit<ScheduleItem, 'id'>): boolean => {
+    // Проверка на существование зависимостей
+    for (const depId of item.dependencies) {
+      const depExists = scheduleItems.some((existingItem) => existingItem.id === depId);
+      if (!depExists) {
+        Alert.alert('Ошибка', `Зависимость с ID ${depId} не найдена`);
+        return false;
+      }
+    }
+
+    // Проверка на циклические зависимости
+    if (selectedItem && hasCircularDependency(selectedItem.id, item.dependencies)) {
+      Alert.alert('Ошибка', 'Обнаружена циклическая зависимость');
+      return false;
+    }
+
+    return true;
+  };
+
+  const validateDates = (item: Omit<ScheduleItem, 'id'>): boolean => {
+    const startDate = new Date(item.startDate);
+    const endDate = new Date(item.endDate);
+
+    // Проверка дат зависимостей
+    for (const depId of item.dependencies) {
+      const depItem = scheduleItems.find((existingItem) => existingItem.id === depId);
+      if (depItem) {
+        const depEndDate = new Date(depItem.endDate);
+        if (startDate < depEndDate) {
+          Alert.alert(
+            'Ошибка',
+            `Дата начала не может быть раньше даты окончания зависимости ${depItem.title}`
+          );
+          return false;
+        }
+      }
+    }
+
+    return true;
+  };
+
+  const handleSubmit = (data: Omit<ScheduleItem, 'id'>) => {
+    if (!validateDependencies(data) || !validateDates(data)) {
+      return;
+    }
+
+    if (selectedItem) {
+      setScheduleItems((prev) =>
+        prev.map((item) =>
+          item.id === selectedItem.id
+            ? { ...data, id: item.id }
+            : item
+        )
+      );
+    } else {
+      const newItem: ScheduleItem = {
+        ...data,
+        id: Date.now().toString(),
+      };
+      setScheduleItems((prev) => [...prev, newItem]);
+    }
     setSelectedItem(undefined);
   };
 
-  const handleDeleteItem = (id: string) => {
-    setScheduleItems(prev => prev.filter(item => item.id !== id));
-    setIsFormVisible(false);
-    setSelectedItem(undefined);
-  };
+  const handleDelete = () => {
+    if (!selectedItem) return;
 
-  const handleItemPress = (item: ScheduleItem) => {
-    setSelectedItem(item);
-    setIsFormVisible(true);
+    // Проверка на зависимости других задач
+    const hasDependentTasks = scheduleItems.some((item) =>
+      item.dependencies.includes(selectedItem.id)
+    );
+
+    if (hasDependentTasks) {
+      Alert.alert(
+        'Ошибка',
+        'Невозможно удалить задачу, так как она является зависимостью для других задач'
+      );
+      return;
+    }
+
+    setScheduleItems((prev) =>
+      prev.filter((item) => item.id !== selectedItem.id)
+    );
+    setSelectedItem(undefined);
   };
 
   const getStatusColor = (status: ScheduleItem['status']) => {
@@ -77,18 +165,26 @@ export default function ScheduleScreen() {
       case 'at-risk':
         return '#FFC107';
       case 'delayed':
-        return '#FF5252';
+        return '#F44336';
+      case 'in-progress':
+        return '#2196F3';
+      default:
+        return '#757575';
     }
   };
 
   const getStatusText = (status: ScheduleItem['status']) => {
     switch (status) {
+      case 'in-progress':
+        return 'В процессе';
       case 'on-track':
         return 'По графику';
       case 'at-risk':
         return 'Под угрозой';
       case 'delayed':
         return 'Отстает';
+      default:
+        return status;
     }
   };
 
@@ -102,6 +198,14 @@ export default function ScheduleScreen() {
     const diffTime = end.getTime() - today.getTime();
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     return diffDays;
+  };
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('ru-RU', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    });
   };
 
   return (
@@ -154,7 +258,10 @@ export default function ScheduleScreen() {
           <TouchableOpacity 
             key={item.id} 
             style={styles.scheduleItem}
-            onPress={() => handleItemPress(item)}
+            onPress={() => {
+              setSelectedItem(item);
+              setIsFormVisible(true);
+            }}
           >
             <View style={styles.scheduleItemHeader}>
               <Text style={styles.scheduleItemTitle}>{item.title}</Text>
@@ -184,13 +291,13 @@ export default function ScheduleScreen() {
               <View style={styles.dateItem}>
                 <Ionicons name="calendar-outline" size={16} color="#666" />
                 <Text style={styles.dateText}>
-                  Начало: {item.startDate}
+                  Начало: {formatDate(item.startDate)}
                 </Text>
               </View>
-              <View style={styles.dateItem}>
+              <View style={[styles.dateItem, { marginTop: 8 }]}>
                 <Ionicons name="calendar-outline" size={16} color="#666" />
                 <Text style={styles.dateText}>
-                  Окончание: {item.endDate}
+                  Окончание: {formatDate(item.endDate)}
                 </Text>
               </View>
             </View>
@@ -231,9 +338,9 @@ export default function ScheduleScreen() {
           setIsFormVisible(false);
           setSelectedItem(undefined);
         }}
-        onSubmit={handleAddItem}
+        onSubmit={handleSubmit}
         initialData={selectedItem}
-        onDelete={selectedItem ? () => handleDeleteItem(selectedItem.id) : undefined}
+        onDelete={handleDelete}
       />
     </SafeAreaView>
   );
@@ -343,8 +450,6 @@ const styles = StyleSheet.create({
     textAlign: 'right',
   },
   datesContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
     marginBottom: 12,
   },
   dateItem: {

@@ -12,12 +12,33 @@ import {
     View,
 } from 'react-native';
 
+interface ScheduleItem {
+  id: string;
+  title: string;
+  startDate: string;
+  endDate: string;
+  status: 'on-track' | 'at-risk' | 'delayed' | 'in-progress';
+  progress: number;
+  dependencies: string[];
+  responsible: string;
+}
+
 interface ScheduleFormProps {
   visible: boolean;
   onClose: () => void;
-  onSubmit: (data: any) => void;
-  initialData?: any;
+  onSubmit: (data: Omit<ScheduleItem, 'id'>) => void;
+  initialData?: ScheduleItem;
   onDelete?: () => void;
+}
+
+interface FormData {
+  title: string;
+  startDate: Date;
+  endDate: Date;
+  progress: string;
+  status: ScheduleItem['status'];
+  responsible: string;
+  dependencies: string;
 }
 
 export default function ScheduleForm({
@@ -27,7 +48,7 @@ export default function ScheduleForm({
   initialData,
   onDelete,
 }: ScheduleFormProps) {
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<FormData>({
     title: '',
     startDate: new Date(),
     endDate: new Date(new Date().setDate(new Date().getDate() + 7)),
@@ -43,29 +64,72 @@ export default function ScheduleForm({
   useEffect(() => {
     if (initialData) {
       setFormData({
-        ...initialData,
+        title: initialData.title || '',
         startDate: new Date(initialData.startDate),
         endDate: new Date(initialData.endDate),
+        progress: initialData.progress.toString(),
+        status: initialData.status,
+        responsible: initialData.responsible || '',
+        dependencies: initialData.dependencies.join(', ') || '',
+      });
+    } else {
+      setFormData({
+        title: '',
+        startDate: new Date(),
+        endDate: new Date(new Date().setDate(new Date().getDate() + 7)),
+        progress: '0',
+        status: 'in-progress',
+        responsible: '',
+        dependencies: '',
       });
     }
   }, [initialData]);
 
-  const handleSubmit = () => {
+  const validateForm = (): boolean => {
     if (!formData.title.trim()) {
       Alert.alert('Ошибка', 'Пожалуйста, введите название задачи');
-      return;
+      return false;
     }
 
     if (formData.startDate > formData.endDate) {
       Alert.alert('Ошибка', 'Дата начала не может быть позже даты окончания');
+      return false;
+    }
+
+    const progress = parseInt(formData.progress);
+    if (isNaN(progress) || progress < 0 || progress > 100) {
+      Alert.alert('Ошибка', 'Прогресс должен быть числом от 0 до 100');
+      return false;
+    }
+
+    if (!formData.responsible.trim()) {
+      Alert.alert('Ошибка', 'Пожалуйста, укажите ответственного');
+      return false;
+    }
+
+    return true;
+  };
+
+  const handleSubmit = () => {
+    if (!validateForm()) {
       return;
     }
 
+    const dependencies = formData.dependencies
+      .split(',')
+      .map(dep => dep.trim())
+      .filter(dep => dep.length > 0);
+
     onSubmit({
-      ...formData,
+      title: formData.title.trim(),
       startDate: formData.startDate.toISOString(),
       endDate: formData.endDate.toISOString(),
+      progress: parseInt(formData.progress),
+      status: formData.status,
+      responsible: formData.responsible.trim(),
+      dependencies,
     });
+    onClose();
   };
 
   const handleDelete = () => {
@@ -94,6 +158,21 @@ export default function ScheduleForm({
     });
   };
 
+  const getStatusText = (status: ScheduleItem['status']) => {
+    switch (status) {
+      case 'in-progress':
+        return 'В процессе';
+      case 'on-track':
+        return 'По графику';
+      case 'at-risk':
+        return 'Под угрозой';
+      case 'delayed':
+        return 'Отстает';
+      default:
+        return status;
+    }
+  };
+
   return (
     <Modal
       visible={visible}
@@ -114,7 +193,7 @@ export default function ScheduleForm({
 
           <ScrollView style={styles.form}>
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Название задачи</Text>
+              <Text style={styles.label}>Название задачи *</Text>
               <TextInput
                 style={styles.input}
                 value={formData.title}
@@ -126,7 +205,7 @@ export default function ScheduleForm({
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Дата начала</Text>
+              <Text style={styles.label}>Дата начала *</Text>
               <TouchableOpacity
                 style={styles.dateInput}
                 onPress={() => setShowStartDatePicker(true)}
@@ -150,7 +229,7 @@ export default function ScheduleForm({
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Дата окончания</Text>
+              <Text style={styles.label}>Дата окончания *</Text>
               <TouchableOpacity
                 style={styles.dateInput}
                 onPress={() => setShowEndDatePicker(true)}
@@ -174,20 +253,24 @@ export default function ScheduleForm({
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Прогресс (%)</Text>
+              <Text style={styles.label}>Прогресс (%) *</Text>
               <TextInput
                 style={styles.input}
                 value={formData.progress}
-                onChangeText={(text) =>
-                  setFormData({ ...formData, progress: text })
-                }
+                onChangeText={(text) => {
+                  const numericValue = text.replace(/[^0-9]/g, '');
+                  if (numericValue === '' || parseInt(numericValue) <= 100) {
+                    setFormData({ ...formData, progress: numericValue });
+                  }
+                }}
                 keyboardType="numeric"
                 placeholder="Например: 75"
+                maxLength={3}
               />
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Статус</Text>
+              <Text style={styles.label}>Статус *</Text>
               <View style={styles.statusContainer}>
                 {['in-progress', 'on-track', 'at-risk', 'delayed'].map(
                   (status) => (
@@ -198,7 +281,7 @@ export default function ScheduleForm({
                         formData.status === status && styles.statusButtonActive,
                       ]}
                       onPress={() =>
-                        setFormData({ ...formData, status: status })
+                        setFormData({ ...formData, status: status as ScheduleItem['status'] })
                       }
                     >
                       <Text
@@ -208,7 +291,7 @@ export default function ScheduleForm({
                             styles.statusButtonTextActive,
                         ]}
                       >
-                        {getStatusText(status)}
+                        {getStatusText(status as ScheduleItem['status'])}
                       </Text>
                     </TouchableOpacity>
                   )
@@ -217,14 +300,14 @@ export default function ScheduleForm({
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Ответственный</Text>
+              <Text style={styles.label}>Ответственный *</Text>
               <TextInput
                 style={styles.input}
                 value={formData.responsible}
                 onChangeText={(text) =>
                   setFormData({ ...formData, responsible: text })
                 }
-                placeholder="Например: Иванов И.И."
+                placeholder="Например: Сергей Смирнов"
               />
             </View>
 
@@ -265,21 +348,6 @@ export default function ScheduleForm({
     </Modal>
   );
 }
-
-const getStatusText = (status: string) => {
-  switch (status) {
-    case 'in-progress':
-      return 'В процессе';
-    case 'on-track':
-      return 'По графику';
-    case 'at-risk':
-      return 'Под угрозой';
-    case 'delayed':
-      return 'Отстает';
-    default:
-      return status;
-  }
-};
 
 const styles = StyleSheet.create({
   modalContainer: {

@@ -1,7 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { useState } from 'react';
+import * as ImagePicker from 'expo-image-picker';
+import React, { useEffect, useState } from 'react';
 import {
     Alert,
+    Image,
     Modal,
     ScrollView,
     StyleSheet,
@@ -10,54 +12,99 @@ import {
     TouchableOpacity,
     View,
 } from 'react-native';
+import PhotoViewer from './PhotoViewer';
+
+interface Work {
+  id: string;
+  title: string;
+  description: string;
+  status: 'pending' | 'in-progress' | 'completed';
+  priority: 'low' | 'medium' | 'high';
+  assignedTo: string;
+  startDate: string;
+  endDate: string;
+  photos: string[];
+}
 
 interface WorkFormProps {
   visible: boolean;
   onClose: () => void;
-  onSave: (work: any) => void;
-  onDelete?: (id: string) => void;
-  initialData?: any;
+  onSubmit: (work: Work) => void;
+  initialData?: Work;
 }
 
-export default function WorkForm({ visible, onClose, onSave, onDelete, initialData }: WorkFormProps) {
-  const [formData, setFormData] = useState({
-    title: initialData?.title || '',
-    description: initialData?.description || '',
-    location: initialData?.location || '',
-    responsible: initialData?.responsible || '',
-    date: initialData?.date || '',
-    status: initialData?.status || 'pending',
+type WorkStatus = 'pending' | 'in-progress' | 'completed';
+type WorkPriority = 'low' | 'medium' | 'high';
+
+export default function WorkForm({ visible, onClose, onSubmit, initialData }: WorkFormProps) {
+  const [formData, setFormData] = useState<Omit<Work, 'id'>>({
+    title: '',
+    description: '',
+    status: 'pending',
+    priority: 'medium',
+    assignedTo: '',
+    startDate: new Date().toISOString().split('T')[0],
+    endDate: new Date().toISOString().split('T')[0],
+    photos: [],
   });
 
-  const handleSave = () => {
-    onSave({
+  const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (initialData) {
+      setFormData({
+        title: initialData.title,
+        description: initialData.description,
+        status: initialData.status,
+        priority: initialData.priority,
+        assignedTo: initialData.assignedTo,
+        startDate: initialData.startDate,
+        endDate: initialData.endDate,
+        photos: initialData.photos,
+      });
+    }
+  }, [initialData]);
+
+  const handleAddPhoto = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Ошибка', 'Необходим доступ к галерее');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [4, 3],
+      quality: 1,
+    });
+
+    if (!result.canceled) {
+      setFormData((prev) => ({
+        ...prev,
+        photos: [...prev.photos, result.assets[0].uri],
+      }));
+    }
+  };
+
+  const handleRemovePhoto = (index: number) => {
+    setFormData((prev) => ({
+      ...prev,
+      photos: prev.photos.filter((_, i) => i !== index),
+    }));
+  };
+
+  const handleSubmit = () => {
+    if (!formData.title || !formData.description) {
+      Alert.alert('Ошибка', 'Пожалуйста, заполните все обязательные поля');
+      return;
+    }
+
+    onSubmit({
       ...formData,
       id: initialData?.id || Date.now().toString(),
     });
     onClose();
-  };
-
-  const handleDelete = () => {
-    if (initialData && onDelete) {
-      Alert.alert(
-        'Удаление работы',
-        'Вы уверены, что хотите удалить эту работу?',
-        [
-          {
-            text: 'Отмена',
-            style: 'cancel',
-          },
-          {
-            text: 'Удалить',
-            style: 'destructive',
-            onPress: () => {
-              onDelete(initialData.id);
-              onClose();
-            },
-          },
-        ]
-      );
-    }
   };
 
   return (
@@ -69,8 +116,8 @@ export default function WorkForm({ visible, onClose, onSave, onDelete, initialDa
     >
       <View style={styles.modalContainer}>
         <View style={styles.modalContent}>
-          <View style={styles.header}>
-            <Text style={styles.title}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>
               {initialData ? 'Редактировать работу' : 'Новая работа'}
             </Text>
             <TouchableOpacity onPress={onClose} style={styles.closeButton}>
@@ -80,21 +127,25 @@ export default function WorkForm({ visible, onClose, onSave, onDelete, initialDa
 
           <ScrollView style={styles.form}>
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Название работы</Text>
+              <Text style={styles.label}>Название *</Text>
               <TextInput
                 style={styles.input}
                 value={formData.title}
-                onChangeText={(text) => setFormData({ ...formData, title: text })}
+                onChangeText={(text) =>
+                  setFormData((prev) => ({ ...prev, title: text }))
+                }
                 placeholder="Введите название работы"
               />
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Описание</Text>
+              <Text style={styles.label}>Описание *</Text>
               <TextInput
                 style={[styles.input, styles.textArea]}
                 value={formData.description}
-                onChangeText={(text) => setFormData({ ...formData, description: text })}
+                onChangeText={(text) =>
+                  setFormData((prev) => ({ ...prev, description: text }))
+                }
                 placeholder="Введите описание работы"
                 multiline
                 numberOfLines={4}
@@ -102,80 +153,162 @@ export default function WorkForm({ visible, onClose, onSave, onDelete, initialDa
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Местоположение</Text>
-              <TextInput
-                style={styles.input}
-                value={formData.location}
-                onChangeText={(text) => setFormData({ ...formData, location: text })}
-                placeholder="Введите местоположение"
-              />
+              <Text style={styles.label}>Статус</Text>
+              <View style={styles.statusContainer}>
+                {(['pending', 'in-progress', 'completed'] as WorkStatus[]).map(
+                  (status) => (
+                    <TouchableOpacity
+                      key={status}
+                      style={[
+                        styles.statusButton,
+                        formData.status === status && styles.statusButtonActive,
+                      ]}
+                      onPress={() =>
+                        setFormData((prev) => ({ ...prev, status }))
+                      }
+                    >
+                      <Text
+                        style={[
+                          styles.statusButtonText,
+                          formData.status === status && styles.statusButtonTextActive,
+                        ]}
+                      >
+                        {status === 'pending'
+                          ? 'Ожидает'
+                          : status === 'in-progress'
+                          ? 'В процессе'
+                          : 'Завершено'}
+                      </Text>
+                    </TouchableOpacity>
+                  )
+                )}
+              </View>
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Приоритет</Text>
+              <View style={styles.priorityContainer}>
+                {(['low', 'medium', 'high'] as WorkPriority[]).map(
+                  (priority) => (
+                    <TouchableOpacity
+                      key={priority}
+                      style={[
+                        styles.priorityButton,
+                        formData.priority === priority && styles.priorityButtonActive,
+                      ]}
+                      onPress={() =>
+                        setFormData((prev) => ({ ...prev, priority }))
+                      }
+                    >
+                      <Text
+                        style={[
+                          styles.priorityButtonText,
+                          formData.priority === priority && styles.priorityButtonTextActive,
+                        ]}
+                      >
+                        {priority === 'low'
+                          ? 'Низкий'
+                          : priority === 'medium'
+                          ? 'Средний'
+                          : 'Высокий'}
+                      </Text>
+                    </TouchableOpacity>
+                  )
+                )}
+              </View>
             </View>
 
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Ответственный</Text>
               <TextInput
                 style={styles.input}
-                value={formData.responsible}
-                onChangeText={(text) => setFormData({ ...formData, responsible: text })}
-                placeholder="Введите ФИО ответственного"
+                value={formData.assignedTo}
+                onChangeText={(text) =>
+                  setFormData((prev) => ({ ...prev, assignedTo: text }))
+                }
+                placeholder="Введите имя ответственного"
               />
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Дата</Text>
+              <Text style={styles.label}>Дата начала</Text>
               <TextInput
                 style={styles.input}
-                value={formData.date}
-                onChangeText={(text) => setFormData({ ...formData, date: text })}
-                placeholder="Введите дату (YYYY-MM-DD)"
+                value={formData.startDate}
+                onChangeText={(text) =>
+                  setFormData((prev) => ({ ...prev, startDate: text }))
+                }
+                placeholder="YYYY-MM-DD"
               />
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Статус</Text>
-              <View style={styles.statusButtons}>
-                {['pending', 'in-progress', 'completed'].map((status) => (
-                  <TouchableOpacity
-                    key={status}
-                    style={[
-                      styles.statusButton,
-                      formData.status === status && styles.statusButtonActive,
-                    ]}
-                    onPress={() => setFormData({ ...formData, status })}
-                  >
-                    <Text
-                      style={[
-                        styles.statusButtonText,
-                        formData.status === status && styles.statusButtonTextActive,
-                      ]}
+              <Text style={styles.label}>Дата окончания</Text>
+              <TextInput
+                style={styles.input}
+                value={formData.endDate}
+                onChangeText={(text) =>
+                  setFormData((prev) => ({ ...prev, endDate: text }))
+                }
+                placeholder="YYYY-MM-DD"
+              />
+            </View>
+
+            <View style={styles.photoSection}>
+              <Text style={styles.sectionTitle}>Фотографии</Text>
+              <View style={styles.photoGrid}>
+                {formData.photos.map((uri, index) => (
+                  <View key={index} style={styles.photoContainer}>
+                    <TouchableOpacity
+                      style={styles.photoWrapper}
+                      onPress={() => setSelectedPhoto(uri)}
                     >
-                      {status === 'pending'
-                        ? 'Ожидает'
-                        : status === 'in-progress'
-                        ? 'В процессе'
-                        : 'Завершено'}
-                    </Text>
-                  </TouchableOpacity>
+                      <Image source={{ uri }} style={styles.photo} />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.removePhotoButton}
+                      onPress={() => handleRemovePhoto(index)}
+                    >
+                      <Ionicons name="close-circle" size={24} color="#FF5252" />
+                    </TouchableOpacity>
+                  </View>
                 ))}
+                <TouchableOpacity
+                  style={styles.addPhotoButton}
+                  onPress={handleAddPhoto}
+                >
+                  <Ionicons name="add" size={32} color="#2196F3" />
+                </TouchableOpacity>
               </View>
             </View>
-          </ScrollView>
 
-          <View style={styles.footer}>
-            {initialData && (
-              <TouchableOpacity style={styles.deleteButton} onPress={handleDelete}>
-                <Text style={styles.deleteButtonText}>Удалить</Text>
+            <View style={styles.buttonContainer}>
+              <TouchableOpacity
+                style={[styles.button, styles.submitButton]}
+                onPress={handleSubmit}
+              >
+                <Text style={styles.buttonText}>
+                  {initialData ? 'Сохранить' : 'Добавить'}
+                </Text>
               </TouchableOpacity>
-            )}
-            <TouchableOpacity style={styles.cancelButton} onPress={onClose}>
-              <Text style={styles.cancelButtonText}>Отмена</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
-              <Text style={styles.saveButtonText}>Сохранить</Text>
-            </TouchableOpacity>
-          </View>
+              <TouchableOpacity
+                style={[styles.button, styles.cancelButton]}
+                onPress={onClose}
+              >
+                <Text style={[styles.buttonText, styles.cancelButtonText]}>
+                  Отмена
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
         </View>
       </View>
+
+      <PhotoViewer
+        visible={!!selectedPhoto}
+        photoUri={selectedPhoto || ''}
+        onClose={() => setSelectedPhoto(null)}
+      />
     </Modal>
   );
 }
@@ -190,9 +323,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    height: '90%',
+    maxHeight: '90%',
   },
-  header: {
+  modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -200,8 +333,8 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#e0e0e0',
   },
-  title: {
-    fontSize: 18,
+  modalTitle: {
+    fontSize: 20,
     fontWeight: 'bold',
   },
   closeButton: {
@@ -214,9 +347,9 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   label: {
-    fontSize: 14,
-    color: '#666',
+    fontSize: 16,
     marginBottom: 8,
+    color: '#333',
   },
   input: {
     borderWidth: 1,
@@ -229,22 +362,19 @@ const styles = StyleSheet.create({
     height: 100,
     textAlignVertical: 'top',
   },
-  statusButtons: {
+  statusContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    gap: 8,
   },
   statusButton: {
     flex: 1,
     padding: 12,
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
     borderRadius: 8,
-    marginHorizontal: 4,
+    backgroundColor: '#f5f5f5',
     alignItems: 'center',
   },
   statusButtonActive: {
     backgroundColor: '#2196F3',
-    borderColor: '#2196F3',
   },
   statusButtonText: {
     color: '#666',
@@ -252,45 +382,96 @@ const styles = StyleSheet.create({
   statusButtonTextActive: {
     color: '#fff',
   },
-  footer: {
+  priorityContainer: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  priorityButton: {
+    flex: 1,
+    padding: 12,
+    borderRadius: 8,
+    backgroundColor: '#f5f5f5',
+    alignItems: 'center',
+  },
+  priorityButtonActive: {
+    backgroundColor: '#2196F3',
+  },
+  priorityButtonText: {
+    color: '#666',
+  },
+  priorityButtonTextActive: {
+    color: '#fff',
+  },
+  photoSection: {
+    marginBottom: 16,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 8,
+  },
+  photoGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  photoContainer: {
+    position: 'relative',
+    width: '33.33%',
+    height: 100,
+  },
+  photoWrapper: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 8,
+    overflow: 'hidden',
+  },
+  photo: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
+  },
+  removePhotoButton: {
+    position: 'absolute',
+    top: -8,
+    right: -8,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+  },
+  addPhotoButton: {
+    width: '33.33%',
+    height: 100,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f5f5f5',
+  },
+  buttonContainer: {
     flexDirection: 'row',
     padding: 16,
     borderTopWidth: 1,
     borderTopColor: '#e0e0e0',
   },
-  deleteButton: {
-    padding: 12,
-    marginRight: 8,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#FF5252',
-  },
-  deleteButtonText: {
-    color: '#FF5252',
-    textAlign: 'center',
-  },
-  cancelButton: {
+  button: {
     flex: 1,
     padding: 12,
-    marginRight: 8,
     borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
   },
-  cancelButtonText: {
-    textAlign: 'center',
-    color: '#666',
-  },
-  saveButton: {
-    flex: 1,
-    padding: 12,
-    marginLeft: 8,
-    borderRadius: 8,
+  submitButton: {
     backgroundColor: '#2196F3',
   },
-  saveButtonText: {
+  cancelButton: {
+    backgroundColor: '#f5f5f5',
+    marginLeft: 8,
+  },
+  buttonText: {
     textAlign: 'center',
     color: '#fff',
     fontWeight: 'bold',
+  },
+  cancelButtonText: {
+    color: '#666',
   },
 }); 

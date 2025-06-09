@@ -9,7 +9,7 @@ interface Notification {
   title: string;
   description: string;
   date: string;
-  status: 'new' | 'in-progress' | 'resolved';
+  status: 'new' | 'in-progress' | 'resolved' | 'pending';
   priority: 'low' | 'medium' | 'high';
   location: string;
   responsible: string;
@@ -20,24 +20,24 @@ export default function NotificationsScreen() {
     {
       id: '1',
       type: 'inspection',
-      title: 'Плановый осмотр фундамента',
-      description: 'Необходимо провести плановый осмотр состояния фундамента и проверить гидроизоляцию.',
-      date: '2025-03-25',
+      title: 'Проверка фундамента',
+      description: 'Необходимо проверить качество заливки фундамента',
+      date: '2024-03-20',
       status: 'new',
       priority: 'medium',
       location: 'Секция А, Уровень -1',
-      responsible: 'Иванов И.И.',
+      responsible: 'Сергей Смирнов',
     },
     {
       id: '2',
       type: 'discrepancy',
-      title: 'Несоответствие в маркировке материалов',
-      description: 'Обнаружено несоответствие в маркировке строительных материалов на складе.',
-      date: '2025-03-24',
+      title: 'Доставка материалов',
+      description: 'Ожидается поставка кирпича и цемента',
+      date: '2024-03-22',
       status: 'in-progress',
       priority: 'high',
       location: 'Склад №2',
-      responsible: 'Петров П.П.',
+      responsible: 'Александр Кузнецов',
     },
     {
       id: '3',

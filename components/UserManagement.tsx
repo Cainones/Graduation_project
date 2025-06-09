@@ -9,6 +9,7 @@ import {
     TouchableOpacity,
     View,
 } from 'react-native';
+import UserForm from './UserForm';
 
 interface User {
   id: string;
@@ -36,6 +37,8 @@ export default function UserManagement({
   const [selectedFilter, setSelectedFilter] = useState<'all' | User['role']>('all');
   const [statusFilter, setStatusFilter] = useState<'all' | User['status']>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [isFormVisible, setIsFormVisible] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<User | null>(null);
 
   const getRoleColor = (role: User['role']) => {
     switch (role) {
@@ -104,14 +107,25 @@ export default function UserManagement({
 
   return (
     <View style={styles.container}>
-      <View style={styles.searchContainer}>
-        <Ionicons name="search" size={20} color="#666" />
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Поиск по имени или email"
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-        />
+      <View style={styles.header}>
+        <View style={styles.searchContainer}>
+          <Ionicons name="search" size={20} color="#666" />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Поиск по имени или email"
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+          />
+        </View>
+        <TouchableOpacity
+          style={styles.addButton}
+          onPress={() => {
+            setSelectedUser(null);
+            setIsFormVisible(true);
+          }}
+        >
+          <Ionicons name="add-circle-outline" size={24} color="#2196F3" />
+        </TouchableOpacity>
       </View>
 
       <View style={styles.filterContainer}>
@@ -191,6 +205,15 @@ export default function UserManagement({
               </View>
               <View style={styles.actions}>
                 <TouchableOpacity
+                  style={styles.editButton}
+                  onPress={() => {
+                    setSelectedUser(user);
+                    setIsFormVisible(true);
+                  }}
+                >
+                  <Ionicons name="create-outline" size={20} color="#2196F3" />
+                </TouchableOpacity>
+                <TouchableOpacity
                   style={[
                     styles.statusButton,
                     { backgroundColor: getStatusColor(user.status) },
@@ -231,6 +254,22 @@ export default function UserManagement({
           </View>
         ))}
       </ScrollView>
+
+      <UserForm
+        visible={isFormVisible}
+        onClose={() => {
+          setIsFormVisible(false);
+          setSelectedUser(null);
+        }}
+        onSubmit={(user) => {
+          if (selectedUser) {
+            onUpdateUser({ ...user, id: selectedUser.id });
+          } else {
+            onAddUser(user);
+          }
+        }}
+        initialData={selectedUser || undefined}
+      />
     </View>
   );
 }
@@ -240,20 +279,34 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f5f5f5',
   },
-  searchContainer: {
+  header: {
     flexDirection: 'row',
     alignItems: 'center',
+    padding: 16,
     backgroundColor: '#fff',
-    padding: 12,
-    margin: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+  },
+  searchContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f5f5f5',
     borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
+    paddingHorizontal: 12,
+    marginRight: 12,
   },
   searchInput: {
     flex: 1,
-    marginLeft: 8,
+    padding: 8,
     fontSize: 16,
+  },
+  addButton: {
+    padding: 4,
+  },
+  editButton: {
+    padding: 8,
+    marginRight: 8,
   },
   filterContainer: {
     paddingHorizontal: 16,

@@ -8,6 +8,7 @@ import {
     TouchableOpacity,
     View,
 } from 'react-native';
+import RoleForm from './RoleForm';
 
 interface Permission {
   id: string;
@@ -40,6 +41,7 @@ export default function RolePermissions({
 }: RolePermissionsProps) {
   const [selectedRole, setSelectedRole] = useState<Role | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<Permission['category']>('work');
+  const [isFormVisible, setIsFormVisible] = useState(false);
 
   const getCategoryIcon = (category: Permission['category']) => {
     switch (category) {
@@ -97,7 +99,18 @@ export default function RolePermissions({
   return (
     <View style={styles.container}>
       <View style={styles.rolesContainer}>
-        <Text style={styles.sectionTitle}>Роли</Text>
+        <View style={styles.rolesHeader}>
+          <Text style={styles.sectionTitle}>Роли</Text>
+          <TouchableOpacity
+            style={styles.addButton}
+            onPress={() => {
+              setSelectedRole(null);
+              setIsFormVisible(true);
+            }}
+          >
+            <Ionicons name="add-circle-outline" size={24} color="#2196F3" />
+          </TouchableOpacity>
+        </View>
         <ScrollView style={styles.rolesList}>
           {roles.map((role) => (
             <TouchableOpacity
@@ -112,12 +125,23 @@ export default function RolePermissions({
                 <Text style={styles.roleName}>{role.name}</Text>
                 <Text style={styles.roleDescription}>{role.description}</Text>
               </View>
-              <TouchableOpacity
-                style={styles.deleteButton}
-                onPress={() => handleDeleteRole(role)}
-              >
-                <Ionicons name="trash-outline" size={20} color="#FF5252" />
-              </TouchableOpacity>
+              <View style={styles.roleActions}>
+                <TouchableOpacity
+                  style={styles.editButton}
+                  onPress={() => {
+                    setSelectedRole(role);
+                    setIsFormVisible(true);
+                  }}
+                >
+                  <Ionicons name="create-outline" size={20} color="#2196F3" />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.deleteButton}
+                  onPress={() => handleDeleteRole(role)}
+                >
+                  <Ionicons name="trash-outline" size={20} color="#FF5252" />
+                </TouchableOpacity>
+              </View>
             </TouchableOpacity>
           ))}
         </ScrollView>
@@ -172,6 +196,23 @@ export default function RolePermissions({
           ))}
         </ScrollView>
       </View>
+
+      <RoleForm
+        visible={isFormVisible}
+        onClose={() => {
+          setIsFormVisible(false);
+          setSelectedRole(null);
+        }}
+        onSubmit={(role) => {
+          if (selectedRole) {
+            onUpdateRole({ ...role, id: selectedRole.id });
+          } else {
+            onAddRole(role);
+          }
+        }}
+        permissions={permissions}
+        initialData={selectedRole || undefined}
+      />
     </View>
   );
 }
@@ -274,5 +315,24 @@ const styles = StyleSheet.create({
   permissionDescription: {
     fontSize: 14,
     color: '#666',
+  },
+  rolesHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+  },
+  addButton: {
+    padding: 4,
+  },
+  roleActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  editButton: {
+    padding: 8,
+    marginRight: 4,
   },
 }); 

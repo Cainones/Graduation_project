@@ -9,59 +9,19 @@ interface ConstructionWork {
   title: string;
   description: string;
   status: 'pending' | 'in-progress' | 'completed';
-  date: string;
-  location: string;
-  responsible: string;
+  priority: 'low' | 'medium' | 'high';
+  assignedTo: string;
+  startDate: string;
+  endDate: string;
+  photos: string[];
 }
 
 export default function ConstructionProgressScreen() {
-  const [works, setWorks] = useState<ConstructionWork[]>([
-    {
-      id: '1',
-      title: 'Фундаментные работы',
-      description: 'Заливка фундамента основного здания',
-      status: 'in-progress',
-      date: '2024-03-20',
-      location: 'Секция А',
-      responsible: 'Иванов И.И.',
-    },
-    {
-      id: '2',
-      title: 'Кирпичная кладка',
-      description: 'Возведение стен первого этажа',
-      status: 'pending',
-      date: '2024-03-25',
-      location: 'Секция Б',
-      responsible: 'Петров П.П.',
-    },
-  ]);
-
+  const [works, setWorks] = useState<ConstructionWork[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'in-progress' | 'completed'>('all');
   const [isFormVisible, setIsFormVisible] = useState(false);
   const [selectedWork, setSelectedWork] = useState<ConstructionWork | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<ConstructionWork['status'] | 'all'>('all');
-
-  const getStatusColor = (status: ConstructionWork['status']) => {
-    switch (status) {
-      case 'completed':
-        return '#4CAF50';
-      case 'in-progress':
-        return '#2196F3';
-      case 'pending':
-        return '#FFC107';
-    }
-  };
-
-  const getStatusText = (status: ConstructionWork['status']) => {
-    switch (status) {
-      case 'completed':
-        return 'Завершено';
-      case 'in-progress':
-        return 'В процессе';
-      case 'pending':
-        return 'Ожидает';
-    }
-  };
 
   const handleAddWork = () => {
     setSelectedWork(null);
@@ -79,17 +39,62 @@ export default function ConstructionProgressScreen() {
     } else {
       setWorks([...works, work]);
     }
+    setIsFormVisible(false);
+    setSelectedWork(null);
   };
 
   const handleDeleteWork = (workId: string) => {
     setWorks(works.filter((w) => w.id !== workId));
   };
 
+  const getStatusColor = (status: ConstructionWork['status']) => {
+    switch (status) {
+      case 'pending':
+        return '#FFC107';
+      case 'in-progress':
+        return '#2196F3';
+      case 'completed':
+        return '#4CAF50';
+    }
+  };
+
+  const getStatusText = (status: ConstructionWork['status']) => {
+    switch (status) {
+      case 'pending':
+        return 'Ожидает';
+      case 'in-progress':
+        return 'В процессе';
+      case 'completed':
+        return 'Завершено';
+    }
+  };
+
+  const getPriorityColor = (priority: ConstructionWork['priority']) => {
+    switch (priority) {
+      case 'low':
+        return '#4CAF50';
+      case 'medium':
+        return '#FFC107';
+      case 'high':
+        return '#FF5252';
+    }
+  };
+
+  const getPriorityText = (priority: ConstructionWork['priority']) => {
+    switch (priority) {
+      case 'low':
+        return 'Низкий';
+      case 'medium':
+        return 'Средний';
+      case 'high':
+        return 'Высокий';
+    }
+  };
+
   const filteredWorks = works.filter((work) => {
     const matchesSearch = work.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       work.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      work.location.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      work.responsible.toLowerCase().includes(searchQuery.toLowerCase());
+      work.assignedTo.toLowerCase().includes(searchQuery.toLowerCase());
     
     const matchesStatus = statusFilter === 'all' || work.status === statusFilter;
     
@@ -99,9 +104,9 @@ export default function ConstructionProgressScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>Контроль строительных работ</Text>
+        <Text style={styles.title}>Прогресс строительства</Text>
         <TouchableOpacity style={styles.addButton} onPress={handleAddWork}>
-          <Ionicons name="add-circle-outline" size={24} color="#2196F3" />
+          <Ionicons name="add" size={24} color="#fff" />
         </TouchableOpacity>
       </View>
 
@@ -110,7 +115,6 @@ export default function ConstructionProgressScreen() {
         <TextInput
           style={styles.searchInput}
           placeholder="Поиск работ..."
-          placeholderTextColor="#666"
           value={searchQuery}
           onChangeText={setSearchQuery}
         />
@@ -118,31 +122,70 @@ export default function ConstructionProgressScreen() {
 
       <View style={styles.filterContainer}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          {['all', 'pending', 'in-progress', 'completed'].map((status) => (
-            <TouchableOpacity
-              key={status}
+          <TouchableOpacity
+            style={[
+              styles.filterButton,
+              statusFilter === 'all' && styles.filterButtonActive,
+            ]}
+            onPress={() => setStatusFilter('all')}
+          >
+            <Text
               style={[
-                styles.filterButton,
-                statusFilter === status && styles.filterButtonActive,
+                styles.filterButtonText,
+                statusFilter === 'all' && styles.filterButtonTextActive,
               ]}
-              onPress={() => setStatusFilter(status as ConstructionWork['status'] | 'all')}
             >
-              <Text
-                style={[
-                  styles.filterButtonText,
-                  statusFilter === status && styles.filterButtonTextActive,
-                ]}
-              >
-                {status === 'all'
-                  ? 'Все'
-                  : status === 'pending'
-                  ? 'Ожидает'
-                  : status === 'in-progress'
-                  ? 'В процессе'
-                  : 'Завершено'}
-              </Text>
-            </TouchableOpacity>
-          ))}
+              Все
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.filterButton,
+              statusFilter === 'pending' && styles.filterButtonActive,
+            ]}
+            onPress={() => setStatusFilter('pending')}
+          >
+            <Text
+              style={[
+                styles.filterButtonText,
+                statusFilter === 'pending' && styles.filterButtonTextActive,
+              ]}
+            >
+              Ожидает
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.filterButton,
+              statusFilter === 'in-progress' && styles.filterButtonActive,
+            ]}
+            onPress={() => setStatusFilter('in-progress')}
+          >
+            <Text
+              style={[
+                styles.filterButtonText,
+                statusFilter === 'in-progress' && styles.filterButtonTextActive,
+              ]}
+            >
+              В процессе
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.filterButton,
+              statusFilter === 'completed' && styles.filterButtonActive,
+            ]}
+            onPress={() => setStatusFilter('completed')}
+          >
+            <Text
+              style={[
+                styles.filterButtonText,
+                statusFilter === 'completed' && styles.filterButtonTextActive,
+              ]}
+            >
+              Завершено
+            </Text>
+          </TouchableOpacity>
         </ScrollView>
       </View>
 
@@ -169,16 +212,20 @@ export default function ConstructionProgressScreen() {
             <Text style={styles.workItemDescription}>{work.description}</Text>
             <View style={styles.workItemDetails}>
               <View style={styles.detailRow}>
-                <Ionicons name="location-outline" size={16} color="#666" />
-                <Text style={styles.detailText}>{work.location}</Text>
-              </View>
-              <View style={styles.detailRow}>
                 <Ionicons name="person-outline" size={16} color="#666" />
-                <Text style={styles.detailText}>{work.responsible}</Text>
+                <Text style={styles.detailText}>{work.assignedTo}</Text>
               </View>
               <View style={styles.detailRow}>
                 <Ionicons name="calendar-outline" size={16} color="#666" />
-                <Text style={styles.detailText}>{work.date}</Text>
+                <Text style={styles.detailText}>
+                  {work.startDate} - {work.endDate}
+                </Text>
+              </View>
+              <View style={styles.detailRow}>
+                <Ionicons name="flag-outline" size={16} color="#666" />
+                <Text style={[styles.detailText, { color: getPriorityColor(work.priority) }]}>
+                  {getPriorityText(work.priority)}
+                </Text>
               </View>
             </View>
           </TouchableOpacity>
@@ -187,10 +234,12 @@ export default function ConstructionProgressScreen() {
 
       <WorkForm
         visible={isFormVisible}
-        onClose={() => setIsFormVisible(false)}
-        onSave={handleSaveWork}
-        onDelete={handleDeleteWork}
-        initialData={selectedWork}
+        onClose={() => {
+          setIsFormVisible(false);
+          setSelectedWork(null);
+        }}
+        onSubmit={handleSaveWork}
+        initialData={selectedWork || undefined}
       />
     </SafeAreaView>
   );
@@ -207,21 +256,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 16,
     backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
   },
   title: {
-    fontSize: 20,
+    fontSize: 24,
     fontWeight: 'bold',
   },
   addButton: {
-    padding: 8,
+    backgroundColor: '#2196F3',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#fff',
-    margin: 16,
+    marginHorizontal: 16,
+    marginTop: 16,
     paddingHorizontal: 12,
     borderRadius: 8,
     borderWidth: 1,
@@ -236,8 +289,8 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   filterContainer: {
+    marginTop: 16,
     paddingHorizontal: 16,
-    marginBottom: 16,
   },
   filterButton: {
     paddingHorizontal: 16,
@@ -266,7 +319,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderRadius: 8,
     padding: 16,
-    marginBottom: 12,
+    marginBottom: 16,
     elevation: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -280,28 +333,28 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   workItemTitle: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: 'bold',
     flex: 1,
+    marginRight: 8,
   },
   statusBadge: {
-    paddingHorizontal: 8,
+    paddingHorizontal: 12,
     paddingVertical: 4,
     borderRadius: 12,
   },
   statusText: {
     color: '#fff',
     fontSize: 12,
-    fontWeight: '500',
+    fontWeight: 'bold',
   },
   workItemDescription: {
-    fontSize: 14,
     color: '#666',
     marginBottom: 12,
   },
   workItemDetails: {
     borderTopWidth: 1,
-    borderTopColor: '#f0f0f0',
+    borderTopColor: '#e0e0e0',
     paddingTop: 12,
   },
   detailRow: {
@@ -310,8 +363,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   detailText: {
-    fontSize: 14,
-    color: '#666',
     marginLeft: 8,
+    color: '#666',
   },
 }); 
