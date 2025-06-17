@@ -92,6 +92,3 @@ my-app/
 3. Внесите изменения
 4. Создайте pull request
 
-## Лицензия
-
-MIT License
